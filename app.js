@@ -1,8 +1,12 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
-const { createServer } = require('http');
-const { Server } = require('socket.io');
+const {
+    createServer
+} = require('http');
+const {
+    Server
+} = require('socket.io');
 const config = require('./config');
 const userDB = require('./userDB');
 const session = require('express-session');
@@ -13,7 +17,9 @@ const io = new Server(httpServer, {
     /* options */
 });
 
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({
+    extended: false
+}));
 app.use(bodyParser.json());
 app.use(cookieParser());
 
@@ -23,10 +29,12 @@ app.use(express.static(__dirname + '/public'));
 
 // Use session middleware
 app.use(session({
-    secret: config.sessionSecret, 
+    secret: config.sessionSecret,
     resave: false,
     saveUninitialized: true,
-    cookie: { maxAge: 24 * 60 * 60 * 1000 } // Set the session duration to 24 hours
+    cookie: {
+        maxAge: 24 * 60 * 60 * 1000
+    } // Set the session duration to 24 hours
 }));
 
 
@@ -67,7 +75,11 @@ app.get('/login', (req, res) => {
 });
 
 app.post('/register', (req, res) => {
-    const { username, password, email } = req.body;
+    const {
+        username,
+        password,
+        email
+    } = req.body;
 
     try {
         const existingUsers = userDB.readDatabase().users;
@@ -77,9 +89,15 @@ app.post('/register', (req, res) => {
         }
 
         // Store the password in plain text (not recommended for production)
-        const newUser = { username, password, email };
+        const newUser = {
+            username,
+            password,
+            email
+        };
         existingUsers.push(newUser);
-        userDB.writeDatabase({ users: existingUsers });
+        userDB.writeDatabase({
+            users: existingUsers
+        });
 
         // Set user information in the session
         req.session.user = {
@@ -99,7 +117,10 @@ app.post('/register', (req, res) => {
 });
 
 app.post('/login', (req, res) => {
-    const { username, password } = req.body;
+    const {
+        username,
+        password
+    } = req.body;
     try {
         const existingUsers = userDB.readDatabase().users;
 
@@ -110,7 +131,7 @@ app.post('/login', (req, res) => {
             // Set user information in the session
             req.session.user = user;
 
-            // Now that we have access to the socket object, set the username
+            // Sets the username
             handleSocketConnection(req.session.user.username);
 
             console.log('Login successful');
@@ -125,39 +146,59 @@ app.post('/login', (req, res) => {
 });
 
 
+io.on('connection', (socket) => {
+socket.emit('chat history', chatMessages);
 
-// Function to handle socket connection and set the username
+socket.on('chat message', (message) => {
+
+    console.log(`Message from ${socket.username}: ${message}`);
+    if (socket.username === lastMessageUser) {
+        lastMessagesCount += 1;
+        if (lastMessagesCount > 4) {
+            lastMessagesCount = 0;
+            chatMessages.push({
+                username: socket.username,
+                message
+            });
+            io.emit('chat message', {
+                username: socket.username,
+                message
+            });
+        } else {
+            chatMessages.push({
+                username: '',
+                message
+            });
+            io.emit('chat message', {
+                username: '',
+                message
+            });
+        }
+    } else {
+        lastMessagesCount = 0;
+        chatMessages.push({
+            username: socket.username,
+            message
+        });
+        io.emit('chat message', {
+            username: socket.username,
+            message
+        });
+        lastMessageUser = socket.username;
+    }
+});
+
+socket.on('disconnect', () => {
+    console.log('User disconnected');
+});
+});
+
+// Gets username of user that's logged in
 function handleSocketConnection(username) {
     io.on('connection', (socket) => {
         console.log('A user connected');
         socket.username = username;
-        socket.emit('chat history', chatMessages);
-
-        socket.on('chat message', (message) => {        
-
-            console.log(`Message from ${socket.username}: ${message}`);
-            if (socket.username === lastMessageUser) {
-                lastMessagesCount += 1;
-                if (lastMessagesCount > 4) {
-                    lastMessagesCount = 0;
-                    chatMessages.push({ username: socket.username, message });
-                    io.emit('chat message', { username: socket.username, message });
-                } else {
-                    chatMessages.push({ username: '', message });
-                    io.emit('chat message', { username: '', message });
-                }
-            } else {
-                lastMessagesCount = 0;
-                chatMessages.push({ username: socket.username, message });
-                io.emit('chat message', { username: socket.username, message });
-                lastMessageUser = socket.username;
-            }
-        });
-
-        socket.on('disconnect', () => {
-            console.log('User disconnected');
-        });
-    });
+    })
 }
 
 httpServer.listen(config.port, () => {
